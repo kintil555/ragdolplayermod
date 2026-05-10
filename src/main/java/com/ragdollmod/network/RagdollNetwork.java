@@ -32,7 +32,7 @@ public class RagdollNetwork {
                 new Id<>(Identifier.of(PlayerRagdollMod.MOD_ID, "ragdoll_input"));
         public static final PacketCodec<PacketByteBuf, InputPayload> CODEC =
                 PacketCodec.of(
-                    (buf, pkt) -> {
+                    (pkt, buf) -> {
                         buf.writeDouble(pkt.moveX());
                         buf.writeDouble(pkt.moveZ());
                         buf.writeFloat(pkt.yaw());
@@ -50,7 +50,7 @@ public class RagdollNetwork {
                 new Id<>(Identifier.of(PlayerRagdollMod.MOD_ID, "ragdoll_sync"));
         public static final PacketCodec<PacketByteBuf, SyncPayload> CODEC =
                 PacketCodec.of(
-                    (buf, pkt) -> buf.writeBoolean(pkt.active()),
+                    (pkt, buf) -> buf.writeBoolean(pkt.active()),
                     buf -> new SyncPayload(buf.readBoolean())
                 );
 
