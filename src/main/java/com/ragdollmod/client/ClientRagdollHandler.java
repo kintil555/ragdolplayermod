@@ -1,6 +1,7 @@
 package com.ragdollmod.client;
 
 import com.ragdollmod.common.physics.RagdollPhysics;
+import com.ragdollmod.common.physics.RagdollSegment;
 import com.ragdollmod.network.RagdollNetwork;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -20,13 +21,11 @@ public class ClientRagdollHandler {
 
     public static void setLocalRagdollActive(boolean active) {
         localActive = active;
-        if (!active) {
-            clientPhysics = null;
-        }
+        clientPhysics = null; // always reset physics on state change
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
             mc.player.displayClientMessage(
-                Component.literal(active ? "§aRagdoll ON (R to toggle)" : "§cRagdoll OFF"),
+                Component.literal(active ? "§aRagdoll ON §7(R to toggle)" : "§cRagdoll OFF"),
                 true
             );
         }
@@ -40,16 +39,24 @@ public class ClientRagdollHandler {
         LocalPlayer player = mc.player;
         if (player == null || mc.level == null) return;
 
-        // ── Key press: toggle ragdoll ──────────────────────────────
+        // Toggle key
         while (RagdollKeyBindings.TOGGLE_RAGDOLL.consumeClick()) {
             RagdollNetwork.sendToggle();
-            // Show immediate local feedback before server responds
             player.displayClientMessage(Component.literal("§eSending ragdoll toggle..."), true);
         }
 
         if (!localActive) return;
 
-        // ── Gather input ───────────────────────────────────────────
+        // Init physics at player position if needed
+        if (clientPhysics == null) {
+            clientPhysics = new RagdollPhysics(player.getX(), player.getY(), player.getZ());
+            // Give initial downward velocity so it falls immediately
+            for (RagdollSegment seg : clientPhysics.segments) {
+                seg.applyImpulse(0, -0.3, 0);
+            }
+        }
+
+        // Gather movement input
         float yaw = (float) Math.toRadians(player.getYRot());
         double moveX = 0, moveZ = 0;
         boolean fwd   = mc.options.keyUp.isDown();
@@ -61,30 +68,31 @@ public class ClientRagdollHandler {
         if (fwd || back || left || right) {
             double sinYaw = Math.sin(yaw);
             double cosYaw = Math.cos(yaw);
-            double fwdX = -sinYaw, fwdZ = cosYaw;
-            double sideX = cosYaw,  sideZ = sinYaw;
-            if (fwd)   { moveX += fwdX;  moveZ += fwdZ; }
-            if (back)  { moveX -= fwdX;  moveZ -= fwdZ; }
-            if (right) { moveX += sideX; moveZ += sideZ; }
-            if (left)  { moveX -= sideX; moveZ -= sideZ; }
+            if (fwd)   { moveX += -sinYaw; moveZ += cosYaw; }
+            if (back)  { moveX -=  -sinYaw; moveZ -= cosYaw; }
+            if (right) { moveX +=  cosYaw; moveZ += sinYaw; }
+            if (left)  { moveX -=  cosYaw; moveZ -= sinYaw; }
             double len = Math.sqrt(moveX * moveX + moveZ * moveZ);
             if (len > 1e-6) { moveX /= len; moveZ /= len; }
         }
 
-        // ── Suppress vanilla movement ──────────────────────────────
-        // Use setDeltaMovement instead of touching input fields directly
-        player.setDeltaMovement(Vec3.ZERO);
-        player.fallDistance = 0;
-        player.setOnGround(true); // prevent fall damage accumulation
-
-        // ── Client-side physics mirror ─────────────────────────────
-        if (clientPhysics == null) {
-            clientPhysics = new RagdollPhysics(player.getX(), player.getY(), player.getZ());
-        }
+        // Step physics
         clientPhysics.applyLocomotionImpulse(moveX, moveZ, jump, yaw);
         clientPhysics.tick(mc.level);
 
-        // ── Send input to server every 2 ticks ────────────────────
+        // Move player entity to torso position so camera follows
+        Vec3 root = clientPhysics.rootPosition();
+        double feetY = clientPhysics.feetY();
+        // Smoothly move player entity toward ragdoll torso
+        player.setPosRaw(
+            root.x * 0.5 + player.getX() * 0.5,
+            feetY,
+            root.z * 0.5 + player.getZ() * 0.5
+        );
+        // Kill vanilla movement completely
+        player.setDeltaMovement(Vec3.ZERO);
+
+        // Send to server every 2 ticks
         sendTimer++;
         if (sendTimer >= 2) {
             sendTimer = 0;
