@@ -70,11 +70,9 @@ public class RagdollNetwork {
 
             if (cap.isActive()) {
                 cap.disable();
-                sp.setNoGravity(false);
                 PlayerRagdollMod.LOGGER.info("[Ragdoll] Disabled for {}", sp.getName().getString());
             } else {
                 cap.enable(sp.getX(), sp.getY(), sp.getZ());
-                sp.setNoGravity(true);
                 PlayerRagdollMod.LOGGER.info("[Ragdoll] Enabled for {}", sp.getName().getString());
             }
 
