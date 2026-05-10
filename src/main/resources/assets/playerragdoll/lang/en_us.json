@@ -1,6 +1,4 @@
 {
-  "key.playerragdoll.category": "Player Ragdoll",
-  "key.playerragdoll.toggle": "Toggle Ragdoll Mode",
-  "message.playerragdoll.ragdoll_on": "Ragdoll mode: ON — Use WASD + Jump to fling yourself!",
-  "message.playerragdoll.ragdoll_off": "Ragdoll mode: OFF"
+  "key.playerragdoll.toggle": "Toggle Ragdoll",
+  "key.playerragdoll.category": "Player Ragdoll"
 }

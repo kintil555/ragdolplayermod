@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "playerragdoll",
+  "version": "${version}",
+  "name": "Player Ragdoll",
+  "description": "Full player ragdoll physics with verlet simulation.",
+  "authors": ["ragdolplayermod"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.ragdollmod.PlayerRagdollMod"],
+    "client": ["com.ragdollmod.PlayerRagdollClientMod"]
+  },
+  "mixins": [
+    "playerragdoll.mixins.json",
+    {
+      "config": "playerragdoll.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

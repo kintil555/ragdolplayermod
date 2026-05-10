@@ -1,36 +1,72 @@
 package com.ragdollmod;
 
-import com.mojang.logging.LogUtils;
+import com.ragdollmod.common.capability.RagdollCapability;
 import com.ragdollmod.common.capability.RagdollCapabilityAttacher;
-import com.ragdollmod.event.RagdollCommonEvents;
-import com.ragdollmod.network.RagdollNetwork;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforge.common.NeoForge;
+import com.ragdollmod.common.physics.RagdollPhysics;
+import com.ragdollmod.network.RagdollInputPayload;
+import com.ragdollmod.network.RagdollSyncPayload;
+import com.ragdollmod.network.ToggleRagdollPayload;
+import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Mod(PlayerRagdollMod.MOD_ID)
-public class PlayerRagdollMod {
+public class PlayerRagdollMod implements ModInitializer {
 
     public static final String MOD_ID = "playerragdoll";
-    public static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public PlayerRagdollMod(IEventBus modEventBus) {
-        modEventBus.addListener(this::commonSetup);
-        // Network payload registration is on the mod bus (done client-side for client mod,
-        // but we also need server-side registration):
-        modEventBus.addListener(RagdollNetwork::onRegisterPayloads);
+    @Override
+    public void onInitialize() {
+        // Register payload types for both directions
+        PayloadTypeRegistry.playC2S().register(ToggleRagdollPayload.ID, ToggleRagdollPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(RagdollInputPayload.ID, RagdollInputPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(RagdollSyncPayload.ID, RagdollSyncPayload.CODEC);
 
-        // Register NeoForge event bus listeners
-        NeoForge.EVENT_BUS.register(RagdollCommonEvents.class);
-        NeoForge.EVENT_BUS.register(RagdollCapabilityAttacher.class);
-    }
-
-    private void commonSetup(FMLCommonSetupEvent event) {
-        event.enqueueWork(() -> {
-            LOGGER.info("[PlayerRagdoll] Common setup complete.");
+        // Handle toggle (client → server)
+        ServerPlayNetworking.registerGlobalReceiver(ToggleRagdollPayload.ID, (payload, ctx) -> {
+            ServerPlayerEntity sp = ctx.player();
+            RagdollCapability cap = RagdollCapabilityAttacher.get(sp);
+            if (cap.isActive()) {
+                cap.disable();
+                LOGGER.info("[Ragdoll] Disabled for {}", sp.getName().getString());
+            } else {
+                cap.enable(sp.getX(), sp.getY(), sp.getZ());
+                LOGGER.info("[Ragdoll] Enabled for {}", sp.getName().getString());
+            }
+            ServerPlayNetworking.send(sp, new RagdollSyncPayload(cap.isActive()));
         });
+
+        // Handle input (client → server)
+        ServerPlayNetworking.registerGlobalReceiver(RagdollInputPayload.ID, (payload, ctx) -> {
+            RagdollCapability cap = RagdollCapabilityAttacher.get(ctx.player());
+            if (!cap.isActive()) return;
+            cap.moveX   = payload.moveX();
+            cap.moveZ   = payload.moveZ();
+            cap.jumping = payload.jumping();
+            cap.yaw     = payload.yaw();
+        });
+
+        // Server tick: advance physics for every player
+        ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
+            for (ServerPlayerEntity sp : server.getPlayerManager().getPlayerList()) {
+                RagdollCapability cap = RagdollCapabilityAttacher.get(sp);
+                if (!cap.isActive()) continue;
+                RagdollPhysics phys = cap.getPhysics();
+                if (phys == null) continue;
+                phys.applyLocomotionImpulse(cap.moveX, cap.moveZ, cap.jumping, cap.yaw);
+                phys.tick(sp.getServerWorld());
+                Vec3d root = phys.rootPosition();
+                sp.requestTeleport(root.x, phys.feetY(), root.z);
+                sp.setVelocity(Vec3d.ZERO);
+            }
+        });
+
+        LOGGER.info("[PlayerRagdoll] Initialized.");
     }
 }
