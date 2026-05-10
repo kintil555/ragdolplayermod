@@ -1,89 +1,61 @@
 plugins {
-    id 'java'
-    id 'net.neoforged.moddev' version '1.0.21'
+    id 'fabric-loom' version '1.7-SNAPSHOT'
+    id 'maven-publish'
 }
 
-version = mod_version
-group = mod_group_id
-base { archivesName = mod_id }
-
-java {
-    toolchain { languageVersion = JavaLanguageVersion.of(21) }
-    withSourcesJar()
-}
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
 
 repositories {
-    maven {
-        name = 'ParchmentMC'
-        url = 'https://maven.parchmentmc.org'
-    }
+    maven { url = 'https://maven.fabricmc.net/' }
     mavenCentral()
 }
 
-neoForge {
-    version = project.neo_version
-
-    parchment {
-        mappingsVersion = "2024.11.17"
-        minecraftVersion = "1.21.1"
-    }
-
-    runs {
-        client {
-            client()
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            systemProperty 'forge.logging.console.level', 'debug'
-            programArguments.addAll '--username', 'Dev'
-        }
-        server {
-            server()
-            programArgument '--nogui'
-        }
-    }
+loom {
+    splitEnvironmentSourceSets()
 
     mods {
         playerragdoll {
             sourceSet sourceSets.main
+            sourceSet sourceSets.client
         }
     }
 }
 
-sourceSets.main.resources {
-    srcDir 'src/generated/resources'
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // JOML is bundled with LWJGL/Minecraft — available at compile-time via minecraft dep
+    // No extra physics library needed: we use JOML (org.joml) for matrix math
+    // and implement XPBD ourselves on top of it
 }
 
 processResources {
-    var replaceProperties = [
-        mod_id               : mod_id,
-        mod_name             : mod_name,
-        mod_version          : mod_version,
-        mod_authors          : mod_authors,
-        mod_description      : mod_description,
-        neo_version_range    : neo_version_range,
-        loader_version_range : loader_version_range,
-        minecraft_version_range: minecraft_version_range
-    ]
-    inputs.properties replaceProperties
-    filesMatching('META-INF/neoforge.mods.toml') {
-        expand replaceProperties
+    inputs.property "version", project.version
+    filteringCharset "UTF-8"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
     }
 }
 
-dependencies {}
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
+    options.encoding = "UTF-8"
+    options.release = 21
 }
 
 jar {
-    manifest {
-        attributes([
-            'Specification-Title'    : 'playerragdoll',
-            'Specification-Vendor'   : 'YourName',
-            'Specification-Version'  : '1',
-            'Implementation-Title'   : 'playerragdoll',
-            'Implementation-Version' : project.version,
-            'Implementation-Vendor'  : 'YourName',
-        ])
-    }
+    inputs.property "archivesName", project.archives_base_name
+    from("LICENSE") { rename { "${it}_${project.archives_base_name}" } }
 }

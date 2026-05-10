@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "playerragdoll",
+  "version": "${version}",
+  "name": "Player Ragdoll",
+  "description": "Press R to collapse into a ragdoll with full XPBD physics. Crawl with WASD. Press R again to stand up.",
+  "authors": ["kintil555"],
+  "contact": {
+    "sources": "https://github.com/kintil555/ragdolplayermod"
+  },
+  "license": "MIT",
+  "icon": "assets/playerragdoll/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.ragdollmod.PlayerRagdollMod"],
+    "client": ["com.ragdollmod.client.PlayerRagdollClientMod"]
+  },
+  "mixins": [
+    "playerragdoll.mixins.json",
+    {
+      "config": "playerragdoll.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  }
+}

@@ -1,114 +1,98 @@
 package com.ragdollmod.network;
 
 import com.ragdollmod.PlayerRagdollMod;
-import com.ragdollmod.common.capability.RagdollCapability;
-import com.ragdollmod.common.capability.RagdollCapabilityAttacher;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
-import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import com.ragdollmod.physics.RagdollState;
+import com.ragdollmod.physics.RagdollStateManager;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.PacketByteBuf;
+import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.Identifier;
 
 public class RagdollNetwork {
 
-    // ── Toggle Ragdoll Packet (C → S) ─────────────────────────────
-    public record ToggleRagdollPacket() implements CustomPacketPayload {
-        public static final Type<ToggleRagdollPacket> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(PlayerRagdollMod.MOD_ID, "toggle_ragdoll"));
-        public static final StreamCodec<FriendlyByteBuf, ToggleRagdollPacket> CODEC =
-            StreamCodec.unit(new ToggleRagdollPacket());
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    // ── Payload: client → server: toggle ragdoll ─────────────────────────────
+
+    public record TogglePayload() implements CustomPayload {
+        public static final Id<TogglePayload> ID =
+                new Id<>(Identifier.of(PlayerRagdollMod.MOD_ID, "toggle_ragdoll"));
+        public static final PacketCodec<PacketByteBuf, TogglePayload> CODEC =
+                PacketCodec.unit(new TogglePayload());
+
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
-    // ── Input State Packet (C → S) ────────────────────────────────
-    public record RagdollInputPacket(double moveX, double moveZ, boolean jumping, float yaw)
-        implements CustomPacketPayload {
-        public static final Type<RagdollInputPacket> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(PlayerRagdollMod.MOD_ID, "ragdoll_input"));
-        public static final StreamCodec<FriendlyByteBuf, RagdollInputPacket> CODEC =
-            StreamCodec.of(
-                (buf, pkt) -> {
-                    buf.writeDouble(pkt.moveX());
-                    buf.writeDouble(pkt.moveZ());
-                    buf.writeBoolean(pkt.jumping());
-                    buf.writeFloat(pkt.yaw());
-                },
-                buf -> new RagdollInputPacket(buf.readDouble(), buf.readDouble(), buf.readBoolean(), buf.readFloat())
-            );
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    // ── Payload: client → server: WASD input while ragdolling ────────────────
+
+    public record InputPayload(double moveX, double moveZ, float yaw)
+            implements CustomPayload {
+        public static final Id<InputPayload> ID =
+                new Id<>(Identifier.of(PlayerRagdollMod.MOD_ID, "ragdoll_input"));
+        public static final PacketCodec<PacketByteBuf, InputPayload> CODEC =
+                PacketCodec.of(
+                    (buf, pkt) -> {
+                        buf.writeDouble(pkt.moveX());
+                        buf.writeDouble(pkt.moveZ());
+                        buf.writeFloat(pkt.yaw());
+                    },
+                    buf -> new InputPayload(buf.readDouble(), buf.readDouble(), buf.readFloat())
+                );
+
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
-    // ── Sync State Packet (S → C) ─────────────────────────────────
-    public record RagdollSyncPacket(boolean active) implements CustomPacketPayload {
-        public static final Type<RagdollSyncPacket> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(PlayerRagdollMod.MOD_ID, "ragdoll_sync"));
-        public static final StreamCodec<FriendlyByteBuf, RagdollSyncPacket> CODEC =
-            StreamCodec.of(
-                (buf, pkt) -> buf.writeBoolean(pkt.active()),
-                buf -> new RagdollSyncPacket(buf.readBoolean())
-            );
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    // ── Payload: server → client: sync active state ───────────────────────────
+
+    public record SyncPayload(boolean active) implements CustomPayload {
+        public static final Id<SyncPayload> ID =
+                new Id<>(Identifier.of(PlayerRagdollMod.MOD_ID, "ragdoll_sync"));
+        public static final PacketCodec<PacketByteBuf, SyncPayload> CODEC =
+                PacketCodec.of(
+                    (buf, pkt) -> buf.writeBoolean(pkt.active()),
+                    buf -> new SyncPayload(buf.readBoolean())
+                );
+
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
-    // ── Event registration (called from mod bus) ───────────────────
-    public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar reg = event.registrar("1");
-        reg.playToServer(ToggleRagdollPacket.TYPE, ToggleRagdollPacket.CODEC, RagdollNetwork::handleToggle);
-        reg.playToServer(RagdollInputPacket.TYPE,  RagdollInputPacket.CODEC,  RagdollNetwork::handleInput);
-        reg.playToClient(RagdollSyncPacket.TYPE,   RagdollSyncPacket.CODEC,   RagdollNetwork::handleSync);
+    // ── Registration ──────────────────────────────────────────────────────────
+
+    /** Call from common ModInitializer — registers payload types for both sides. */
+    public static void registerPayloads() {
+        PayloadTypeRegistry.playC2S().register(TogglePayload.ID, TogglePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(InputPayload.ID,  InputPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SyncPayload.ID,   SyncPayload.CODEC);
     }
 
-    // ── Server-side handlers ───────────────────────────────────────
-    private static void handleToggle(ToggleRagdollPacket pkt, IPayloadContext ctx) {
-        ctx.enqueueWork(() -> {
-            if (!(ctx.player() instanceof ServerPlayer sp)) return;
-            RagdollCapability cap = RagdollCapabilityAttacher.get(sp);
-
-            if (cap.isActive()) {
-                cap.disable();
-                PlayerRagdollMod.LOGGER.info("[Ragdoll] Disabled for {}", sp.getName().getString());
-            } else {
-                cap.enable(sp.getX(), sp.getY(), sp.getZ());
-                PlayerRagdollMod.LOGGER.info("[Ragdoll] Enabled for {}", sp.getName().getString());
-            }
-
-            // Send state back to client
-            boolean nowActive = cap.isActive();
-            PlayerRagdollMod.LOGGER.info("[Ragdoll] Sending sync to client: active={}", nowActive);
-            PacketDistributor.sendToPlayer(sp, new RagdollSyncPacket(nowActive));
+    /** Call from common ModInitializer — registers server-side receive handlers. */
+    public static void registerServerHandlers() {
+        ServerPlayNetworking.registerGlobalReceiver(TogglePayload.ID, (payload, context) -> {
+            ServerPlayerEntity player = context.player();
+            context.server().execute(() -> {
+                RagdollState state = RagdollStateManager.get(player);
+                if (state.isActive()) {
+                    state.disable();
+                    PlayerRagdollMod.LOGGER.debug("[Ragdoll] OFF for {}", player.getName().getString());
+                } else {
+                    state.enable(player.getX(), player.getY(), player.getZ());
+                    PlayerRagdollMod.LOGGER.debug("[Ragdoll] ON for {}", player.getName().getString());
+                }
+                // Sync state back to the triggering client
+                ServerPlayNetworking.send(player, new SyncPayload(state.isActive()));
+            });
         });
-    }
 
-    private static void handleInput(RagdollInputPacket pkt, IPayloadContext ctx) {
-        ctx.enqueueWork(() -> {
-            if (!(ctx.player() instanceof ServerPlayer sp)) return;
-            RagdollCapability cap = RagdollCapabilityAttacher.get(sp);
-            if (!cap.isActive()) return;
-            cap.moveX   = pkt.moveX();
-            cap.moveZ   = pkt.moveZ();
-            cap.jumping = pkt.jumping();
-            cap.yaw     = pkt.yaw();
+        ServerPlayNetworking.registerGlobalReceiver(InputPayload.ID, (payload, context) -> {
+            ServerPlayerEntity player = context.player();
+            context.server().execute(() -> {
+                RagdollState state = RagdollStateManager.get(player);
+                if (!state.isActive()) return;
+                state.moveX = payload.moveX();
+                state.moveZ = payload.moveZ();
+                state.yaw   = payload.yaw();
+            });
         });
-    }
-
-    // ── Client-side handler ────────────────────────────────────────
-    private static void handleSync(RagdollSyncPacket pkt, IPayloadContext ctx) {
-        ctx.enqueueWork(() -> {
-            PlayerRagdollMod.LOGGER.info("[Ragdoll] Client received sync: active={}", pkt.active());
-            com.ragdollmod.client.ClientRagdollHandler.setLocalRagdollActive(pkt.active());
-        });
-    }
-
-    // ── Client helpers ─────────────────────────────────────────────
-    public static void sendToggle() {
-        PacketDistributor.sendToServer(new ToggleRagdollPacket());
-    }
-
-    public static void sendInput(double mx, double mz, boolean jump, float yaw) {
-        PacketDistributor.sendToServer(new RagdollInputPacket(mx, mz, jump, yaw));
     }
 }
