@@ -16,7 +16,6 @@ public class PlayerRagdollClientMod {
     public PlayerRagdollClientMod(IEventBus modEventBus) {
         modEventBus.addListener(this::clientSetup);
         modEventBus.addListener(RagdollKeyBindings::onRegisterKeyMappings);
-        modEventBus.addListener(RagdollNetwork::onRegisterPayloads);
 
         NeoForge.EVENT_BUS.register(ClientRagdollHandler.class);
         NeoForge.EVENT_BUS.register(RagdollPlayerRenderer.class);
