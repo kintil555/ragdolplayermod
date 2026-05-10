@@ -52,6 +52,23 @@ sourceSets.main.resources {
     srcDir 'src/generated/resources'
 }
 
+processResources {
+    var replaceProperties = [
+        mod_id               : mod_id,
+        mod_name             : mod_name,
+        mod_version          : mod_version,
+        mod_authors          : mod_authors,
+        mod_description      : mod_description,
+        neo_version_range    : neo_version_range,
+        loader_version_range : loader_version_range,
+        minecraft_version_range: minecraft_version_range
+    ]
+    inputs.properties replaceProperties
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand replaceProperties
+    }
+}
+
 dependencies {}
 
 tasks.withType(JavaCompile).configureEach {
