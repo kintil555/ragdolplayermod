@@ -39,17 +39,10 @@ neoForge {
             server()
             programArgument '--nogui'
         }
-        data {
-            data()
-            programArguments.addAll '--mod', project.mod_id,
-                '--all',
-                '--output', file('src/generated/resources/').getAbsolutePath(),
-                '--existing', file('src/main/resources/').getAbsolutePath()
-        }
     }
 
     mods {
-        "${mod_id}" {
+        playerragdoll {
             sourceSet sourceSets.main
         }
     }
@@ -68,12 +61,12 @@ tasks.withType(JavaCompile).configureEach {
 jar {
     manifest {
         attributes([
-            'Specification-Title'     : mod_id,
-            'Specification-Vendor'    : mod_authors,
-            'Specification-Version'   : '1',
-            'Implementation-Title'    : project.name,
-            'Implementation-Version'  : project.jar.archiveVersion,
-            'Implementation-Vendor'   : mod_authors,
+            'Specification-Title'    : 'playerragdoll',
+            'Specification-Vendor'   : 'YourName',
+            'Specification-Version'  : '1',
+            'Implementation-Title'   : 'playerragdoll',
+            'Implementation-Version' : project.version,
+            'Implementation-Vendor'  : 'YourName',
         ])
     }
 }
