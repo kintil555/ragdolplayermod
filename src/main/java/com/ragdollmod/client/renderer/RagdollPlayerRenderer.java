@@ -2,6 +2,7 @@ package com.ragdollmod.client.renderer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import com.ragdollmod.PlayerRagdollMod;
 import com.ragdollmod.client.ClientRagdollHandler;
 import com.ragdollmod.common.physics.RagdollPhysics;
 import com.ragdollmod.common.physics.RagdollSegment;
@@ -25,15 +26,15 @@ public class RagdollPlayerRenderer {
         RagdollPhysics phys = ClientRagdollHandler.clientPhysics;
         if (phys == null) return;
 
-        // Only handle AbstractClientPlayer instances
         if (!(event.getEntity() instanceof AbstractClientPlayer player)) return;
 
+        // Cancel vanilla rendering
         event.setCanceled(true);
 
         PoseStack poseStack   = event.getPoseStack();
         MultiBufferSource buf = event.getMultiBufferSource();
         int packedLight       = event.getPackedLight();
-        float partialTick     = event.getPartialTick(); // float in NeoForge 1.21.1
+        float partialTick     = event.getPartialTick();
 
         PlayerRenderer renderer = event.getRenderer();
         PlayerModel<AbstractClientPlayer> model = renderer.getModel();
@@ -59,13 +60,13 @@ public class RagdollPlayerRenderer {
         double relZ = seg.z - camera.z;
 
         Vec3 vel = seg.velocity();
-        float tiltZ = (float)(vel.x * 4.0);
-        float tiltX = (float)(vel.z * 4.0);
+        float tiltZ = (float) Math.toDegrees(vel.x * 2.0);
+        float tiltX = (float) Math.toDegrees(vel.z * 2.0);
 
         poseStack.pushPose();
         poseStack.translate(relX, relY, relZ);
-        poseStack.mulPose(Axis.ZP.rotation(tiltZ));
-        poseStack.mulPose(Axis.XP.rotation(tiltX));
+        poseStack.mulPose(Axis.ZP.rotationDegrees(tiltZ));
+        poseStack.mulPose(Axis.XP.rotationDegrees(tiltX));
         poseStack.scale(-1f, -1f, 1f);
 
         setAllPartsVisible(model, false);
@@ -94,14 +95,14 @@ public class RagdollPlayerRenderer {
 
     private static void showPart(PlayerModel<?> model, int segIdx) {
         switch (segIdx) {
-            case RagdollPhysics.HEAD    -> { model.head.visible = true;      model.hat.visible = true; }
-            case RagdollPhysics.TORSO   -> { model.body.visible = true;      model.jacket.visible = true; }
-            case RagdollPhysics.L_ARM   -> { model.leftArm.visible = true;   model.leftSleeve.visible = true; }
-            case RagdollPhysics.R_ARM   -> { model.rightArm.visible = true;  model.rightSleeve.visible = true; }
+            case RagdollPhysics.HEAD    -> { model.head.visible = true;     model.hat.visible = true; }
+            case RagdollPhysics.TORSO   -> { model.body.visible = true;     model.jacket.visible = true; }
+            case RagdollPhysics.L_ARM   -> { model.leftArm.visible = true;  model.leftSleeve.visible = true; }
+            case RagdollPhysics.R_ARM   -> { model.rightArm.visible = true; model.rightSleeve.visible = true; }
             case RagdollPhysics.L_FORE  ->   model.leftArm.visible = true;
             case RagdollPhysics.R_FORE  ->   model.rightArm.visible = true;
-            case RagdollPhysics.L_THIGH -> { model.leftLeg.visible = true;   model.leftPants.visible = true; }
-            case RagdollPhysics.R_THIGH -> { model.rightLeg.visible = true;  model.rightPants.visible = true; }
+            case RagdollPhysics.L_THIGH -> { model.leftLeg.visible = true;  model.leftPants.visible = true; }
+            case RagdollPhysics.R_THIGH -> { model.rightLeg.visible = true; model.rightPants.visible = true; }
             case RagdollPhysics.L_SHIN  ->   model.leftLeg.visible = true;
             case RagdollPhysics.R_SHIN  ->   model.rightLeg.visible = true;
         }
